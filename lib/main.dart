@@ -7,6 +7,7 @@ import 'screens/profile_screen.dart';
 import 'providers/profile_provider.dart';
 import 'providers/food_provider.dart';
 import 'providers/daily_meal_provider.dart';
+import 'screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -51,7 +52,11 @@ class MyApp extends StatelessWidget {
             ),
           ),
         ),
-        home: const MainNavigation(),
+        initialRoute: '/',
+        routes: {
+          '/': (context) => const SplashScreen(),
+          '/main': (context) => const MainNavigation(),
+        },
       ),
     );
   }

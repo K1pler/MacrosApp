@@ -291,4 +291,11 @@ class DailyMealProvider extends ChangeNotifier {
     final cutoffDate = DateTime.now().subtract(const Duration(days: 7));
     _mealsCache.removeWhere((key, meal) => meal.date.isBefore(cutoffDate));
   }
+
+  // Sincronizar alimentos con FoodProvider
+  void syncFoodsFromFoodProvider(List<Food> foods) {
+    _availableFoods = List.from(foods);
+    _filteredFoods = List.from(foods);
+    notifyListeners();
+  }
 } 

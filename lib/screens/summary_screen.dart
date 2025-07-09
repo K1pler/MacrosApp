@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:fl_chart/fl_chart.dart';
 import '../providers/daily_meal_provider.dart';
 import '../providers/profile_provider.dart';
+import '../providers/food_provider.dart';
 import '../models/food.dart';
 import '../models/daily_meal.dart';
 
@@ -26,7 +26,9 @@ class _SummaryScreenState extends State<SummaryScreen>
     _tabController = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final mealProvider = Provider.of<DailyMealProvider>(context, listen: false);
+      final profileProvider = Provider.of<ProfileProvider>(context, listen: false);
       mealProvider.loadFoods();
+      profileProvider.loadProfileFromFirestore();
     });
   }
 
@@ -102,6 +104,7 @@ class _SummaryScreenState extends State<SummaryScreen>
             await Provider.of<DailyMealProvider>(context, listen: false).setSelectedDate(
               Provider.of<DailyMealProvider>(context, listen: false).selectedDate,
             );
+            if (!mounted) return;
           },
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -112,7 +115,6 @@ class _SummaryScreenState extends State<SummaryScreen>
                 const SizedBox(height: 20),
                 _buildMacrosSummaryCard(currentMeal, userGoals),
                 const SizedBox(height: 20),
-                _buildProgressChart(currentMeal, userGoals),
                 const SizedBox(height: 20),
                 _buildConsumedFoodsList(mealProvider),
               ],
@@ -124,18 +126,24 @@ class _SummaryScreenState extends State<SummaryScreen>
   }
 
   Widget _buildAddFoodTab() {
-    return Consumer<DailyMealProvider>(
-      builder: (context, mealProvider, child) {
+    return Consumer2<DailyMealProvider, FoodProvider>(
+      builder: (context, mealProvider, foodProvider, child) {
         if (mealProvider.isLoading) {
           return const Center(
             child: CircularProgressIndicator(color: Colors.red),
           );
         }
 
+        // Recargar alimentos de FoodProvider en DailyMealProvider si hay cambios
+        if (foodProvider.foods.isNotEmpty) {
+          mealProvider.syncFoodsFromFoodProvider(foodProvider.foods);
+        }
+
         return RefreshIndicator(
           color: Colors.red,
           onRefresh: () async {
             await Provider.of<DailyMealProvider>(context, listen: false).loadFoods();
+            if (!mounted) return;
           },
           child: Column(
             children: [
@@ -181,6 +189,13 @@ class _SummaryScreenState extends State<SummaryScreen>
   }
 
   Widget _buildMacrosSummaryCard(DailyMeal? currentMeal, userGoals) {
+    final profileProvider = Provider.of<ProfileProvider>(context, listen: false);
+    final details = profileProvider.getCalculationDetails();
+    final bmr = details['bmr'] ?? 0;
+    final tdee = details['tdee'] ?? 0;
+    final targetCalories = details['targetCalories'] ?? 0;
+    final deficit = details['deficit'] ?? 0;
+
     final totalKcal = currentMeal?.totalKcal ?? 0;
     final totalProteinas = currentMeal?.totalProteinas ?? 0;
     final totalCarbohidratos = currentMeal?.totalCarbohidratos ?? 0;
@@ -196,146 +211,76 @@ class _SummaryScreenState extends State<SummaryScreen>
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Resumen de Macros',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
+            const Center(
+              child: Text(
+                'Resumen de Macros',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
+            const SizedBox(height: 12),
+            Text('Tasa Metabólica Basal (TMB): ${bmr.toStringAsFixed(1)} kcal', style: const TextStyle(color: Colors.white70)),
+            Text('Gasto total diario (TDEE): ${tdee.toStringAsFixed(1)} kcal', style: const TextStyle(color: Colors.white70)),
+            Text('TDEE con déficit/superávit: ${targetCalories.toStringAsFixed(1)} kcal', style: const TextStyle(color: Colors.white70)),
+            if (deficit != 0)
+              Text('Déficit/Superávit aplicado: ${deficit > 0 ? '+' : ''}${deficit.toStringAsFixed(1)} kcal', style: const TextStyle(color: Colors.white54)),
             const SizedBox(height: 16),
-            _buildMacroRow('Calorías', totalKcal, goalKcal, 'kcal', Colors.red),
-            const SizedBox(height: 12),
-            _buildMacroRow('Proteínas', totalProteinas, goalProteinas, 'g', Colors.blue),
-            const SizedBox(height: 12),
-            _buildMacroRow('Carbohidratos', totalCarbohidratos, goalCarbohidratos, 'g', Colors.green),
-            const SizedBox(height: 12),
-            _buildMacroRow('Grasas', totalGrasas, goalGrasas, 'g', Colors.orange),
+            _buildMacroRowVertical('Calorías', totalKcal, goalKcal, 'kcal', Colors.red),
+            _buildMacroRowVertical('Proteínas', totalProteinas, goalProteinas, 'g', Colors.blue),
+            _buildMacroRowVertical('Carbohidratos', totalCarbohidratos, goalCarbohidratos, 'g', Colors.green),
+            _buildMacroRowVertical('Grasas', totalGrasas, goalGrasas, 'g', Colors.orange),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildMacroRow(String name, double current, double goal, String unit, Color color) {
+  Widget _buildMacroRowVertical(String name, double current, double goal, String unit, Color color) {
     final percentage = goal > 0 ? (current / goal) * 100 : 0;
     final remaining = goal - current;
 
-    return Row(
-      children: [
-        Expanded(
-          flex: 2,
-          child: Text(
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12), // Aumenta el espacio entre macros
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
             name,
             style: const TextStyle(color: Colors.white, fontSize: 16),
           ),
-        ),
-        Expanded(
-          flex: 3,
-          child: LinearProgressIndicator(
+          const SizedBox(height: 4),
+          LinearProgressIndicator(
             value: (percentage / 100).clamp(0.0, 1.0),
             backgroundColor: Colors.grey[700],
             valueColor: AlwaysStoppedAnimation<Color>(color),
+            minHeight: 10, // Aumenta el grosor de la barra
           ),
-        ),
-        Expanded(
-          flex: 2,
-          child: Text(
-            '${current.toStringAsFixed(1)}/${goal.toStringAsFixed(1)} $unit',
-            style: const TextStyle(color: Colors.white, fontSize: 12),
-            textAlign: TextAlign.center,
-          ),
-        ),
-        Expanded(
-          flex: 1,
-          child: Text(
-            remaining > 0 ? '-${remaining.toStringAsFixed(1)}' : '+${(-remaining).toStringAsFixed(1)}',
-            style: TextStyle(
-              color: remaining > 0 ? Colors.grey : Colors.red,
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-            ),
-            textAlign: TextAlign.end,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildProgressChart(DailyMeal? currentMeal, userGoals) {
-    if (currentMeal == null) return const SizedBox();
-
-    final progressData = currentMeal.getProgressPercentage({
-      'kcal': userGoals.calories,
-      'proteinas': userGoals.protein,
-      'carbohidratos': userGoals.carbs,
-      'grasas': userGoals.fat,
-    });
-
-    return Card(
-      color: Colors.grey[900],
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            const Text(
-              'Progreso Diario (%)',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              height: 200,
-              child: BarChart(
-                BarChartData(
-                  alignment: BarChartAlignment.spaceAround,
-                  maxY: 120,
-                  barTouchData: BarTouchData(enabled: false),
-                  titlesData: FlTitlesData(
-                    show: true,
-                    bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        getTitlesWidget: (value, meta) {
-                          switch (value.toInt()) {
-                            case 0: return const Text('Kcal', style: TextStyle(color: Colors.white, fontSize: 10));
-                            case 1: return const Text('Prot', style: TextStyle(color: Colors.white, fontSize: 10));
-                            case 2: return const Text('Carb', style: TextStyle(color: Colors.white, fontSize: 10));
-                            case 3: return const Text('Gras', style: TextStyle(color: Colors.white, fontSize: 10));
-                          }
-                          return const Text('');
-                        },
-                      ),
-                    ),
-                    leftTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        getTitlesWidget: (value, meta) {
-                          return Text('${value.toInt()}%', style: const TextStyle(color: Colors.white, fontSize: 10));
-                        },
-                      ),
-                    ),
-                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  ),
-                  gridData: FlGridData(show: false),
-                  borderData: FlBorderData(show: false),
-                  barGroups: [
-                    BarChartGroupData(x: 0, barRods: [BarChartRodData(toY: progressData['kcal']!.clamp(0, 120), color: Colors.red)]),
-                    BarChartGroupData(x: 1, barRods: [BarChartRodData(toY: progressData['proteinas']!.clamp(0, 120), color: Colors.blue)]),
-                    BarChartGroupData(x: 2, barRods: [BarChartRodData(toY: progressData['carbohidratos']!.clamp(0, 120), color: Colors.green)]),
-                    BarChartGroupData(x: 3, barRods: [BarChartRodData(toY: progressData['grasas']!.clamp(0, 120), color: Colors.orange)]),
-                  ],
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${current.toStringAsFixed(1)}/${goal.toStringAsFixed(1)} $unit',
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
                 ),
               ),
-            ),
-          ],
-        ),
+              Text(
+                remaining > 0 ? '-${remaining.toStringAsFixed(1)}' : '+${(-remaining).toStringAsFixed(1)}',
+                style: TextStyle(
+                  color: remaining > 0 ? Colors.grey : Colors.red,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.end,
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -447,12 +392,15 @@ class _SummaryScreenState extends State<SummaryScreen>
             },
           ),
           const SizedBox(height: 12),
+          const Text(
+            'Filtrar por tipo',
+            style: TextStyle(color: Colors.grey, fontSize: 13),
+          ),
+          const SizedBox(height: 4),
           DropdownButtonFormField<String>(
             value: _selectedFoodType,
             style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
-              labelText: 'Filtrar por tipo',
-              labelStyle: const TextStyle(color: Colors.grey),
               filled: true,
               fillColor: Colors.grey[800],
               border: OutlineInputBorder(

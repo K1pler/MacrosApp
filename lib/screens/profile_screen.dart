@@ -216,6 +216,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                           const SizedBox(height: 16),
                           Container(
+                            alignment: Alignment.centerLeft,
+                            constraints: const BoxConstraints(maxWidth: 400), // Limita el ancho para alinear
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
                               color: Colors.grey[800],
