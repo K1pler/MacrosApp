@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../providers/daily_meal_provider.dart';
 import '../providers/profile_provider.dart';
 import '../providers/food_provider.dart';
@@ -19,11 +21,13 @@ class _SummaryScreenState extends State<SummaryScreen>
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _quantityController = TextEditingController();
   String? _selectedFoodType;
+  DateTime _startDate = DateTime.now().subtract(const Duration(days: 7));
+  DateTime _endDate = DateTime.now();
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final mealProvider = Provider.of<DailyMealProvider>(context, listen: false);
       final profileProvider = Provider.of<ProfileProvider>(context, listen: false);
@@ -57,6 +61,7 @@ class _SummaryScreenState extends State<SummaryScreen>
           tabs: const [
             Tab(text: 'Progreso', icon: Icon(Icons.analytics)),
             Tab(text: 'Añadir Comida', icon: Icon(Icons.add_circle)),
+            Tab(text: 'Déficit Total', icon: Icon(Icons.trending_down)),
           ],
         ),
         actions: [
@@ -71,6 +76,7 @@ class _SummaryScreenState extends State<SummaryScreen>
         children: [
           _buildProgressTab(),
           _buildAddFoodTab(),
+          _buildDeficitTab(),
         ],
       ),
     );
@@ -100,7 +106,9 @@ class _SummaryScreenState extends State<SummaryScreen>
         return RefreshIndicator(
           color: Colors.red,
           onRefresh: () async {
+            if (!mounted) return;
             await Provider.of<ProfileProvider>(context, listen: false).loadProfileFromFirestore();
+            if (!mounted) return;
             await Provider.of<DailyMealProvider>(context, listen: false).setSelectedDate(
               Provider.of<DailyMealProvider>(context, listen: false).selectedDate,
             );
@@ -142,12 +150,15 @@ class _SummaryScreenState extends State<SummaryScreen>
         return RefreshIndicator(
           color: Colors.red,
           onRefresh: () async {
+            if (!mounted) return;
             await Provider.of<DailyMealProvider>(context, listen: false).loadFoods();
             if (!mounted) return;
           },
           child: Column(
             children: [
               _buildSearchAndFilters(mealProvider),
+              const SizedBox(height: 8),
+              _buildAddCombinedFoodButton(mealProvider),
               Expanded(
                 child: _buildFoodsList(mealProvider),
               ),
@@ -384,10 +395,11 @@ class _SummaryScreenState extends State<SummaryScreen>
                 borderSide: BorderSide.none,
               ),
             ),
-            onChanged: (value) {
+            onChanged: (text) {
+              setState(() {});
               mealProvider.filterFoods(
                 tipo: _selectedFoodType,
-                searchText: value,
+                searchText: text,
               );
             },
           ),
@@ -398,7 +410,7 @@ class _SummaryScreenState extends State<SummaryScreen>
           ),
           const SizedBox(height: 4),
           DropdownButtonFormField<String>(
-            value: _selectedFoodType,
+            value: foodTypes.contains(_selectedFoodType) ? _selectedFoodType : null,
             style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
               filled: true,
@@ -414,7 +426,7 @@ class _SummaryScreenState extends State<SummaryScreen>
                 value: null,
                 child: Text('Todos los tipos'),
               ),
-              ...foodTypes.map((type) => DropdownMenuItem<String>(
+              ...foodTypes.toSet().map((type) => DropdownMenuItem<String>(
                 value: type,
                 child: Text(type),
               )),
@@ -514,18 +526,20 @@ class _SummaryScreenState extends State<SummaryScreen>
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () {
+            onPressed: () async {
               final quantity = double.tryParse(_quantityController.text);
               if (quantity != null && quantity > 0) {
-                mealProvider.addConsumedFood(food, quantity);
                 Navigator.pop(context);
-                _tabController.animateTo(0); // Cambiar a la pestaña de progreso
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Alimento añadido correctamente'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
+                await mealProvider.addConsumedFood(food, quantity);
+                if (mounted) {
+                  _tabController.animateTo(0); // Cambiar a la pestaña de progreso
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Alimento añadido correctamente'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
               }
             },
             child: const Text('Añadir', style: TextStyle(color: Colors.white)),
@@ -568,17 +582,19 @@ class _SummaryScreenState extends State<SummaryScreen>
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () {
+            onPressed: () async {
               final quantity = double.tryParse(_quantityController.text);
               if (quantity != null && quantity > 0) {
-                mealProvider.updateConsumedFoodQuantity(index, quantity);
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Cantidad actualizada'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
+                await mealProvider.updateConsumedFoodQuantity(index, quantity);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Cantidad actualizada'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
               }
             },
             child: const Text('Actualizar', style: TextStyle(color: Colors.white)),
@@ -616,9 +632,484 @@ class _SummaryScreenState extends State<SummaryScreen>
   }
 
   void _changeDate(DailyMealProvider mealProvider, int days) {
+    if (!mounted) return;
+    
     final newDate = mealProvider.selectedDate.add(Duration(days: days));
     if (newDate.isBefore(DateTime.now().add(const Duration(days: 2)))) {
       mealProvider.setSelectedDate(newDate);
+    }
+  }
+
+  Widget _buildAddCombinedFoodButton(DailyMealProvider mealProvider) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: ElevatedButton.icon(
+        onPressed: () => _showAddCombinedFoodDialog(mealProvider),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.orange,
+          foregroundColor: Colors.white,
+          minimumSize: const Size(double.infinity, 50),
+        ),
+        icon: const Icon(Icons.restaurant_menu),
+        label: const Text(
+          'Añadir Comida Combinada',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
+  }
+
+  void _showAddCombinedFoodDialog(DailyMealProvider mealProvider) {
+    final TextEditingController jsonController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text(
+          'Añadir Comida Combinada',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Introduce el JSON de la comida combinada:',
+              style: TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: jsonController,
+              maxLines: 8,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: '{"nombre": "Pollo con arroz", "tipo": "Comida combinada", "cantidad_referencia": 300, "kcal": 450, "proteinas": 35, "carbohidratos": 45, "grasas": 12}',
+                hintStyle: const TextStyle(color: Colors.grey),
+                filled: true,
+                fillColor: Colors.grey[800],
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            onPressed: () async {
+              final jsonText = jsonController.text.trim();
+              if (jsonText.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Por favor, introduce el JSON de la comida'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+
+              try {
+                final jsonData = json.decode(jsonText);
+                final food = Food.fromJson(jsonData);
+                
+                // Añadir a la base de datos de alimentos
+                final foodProvider = Provider.of<FoodProvider>(context, listen: false);
+                final success = await foodProvider.addFood(food);
+                
+                if (success && mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Comida combinada "${food.nombre}" añadida a la base de datos'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                  
+                  // Recargar alimentos en el mealProvider
+                  await mealProvider.loadFoods();
+                }
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error al procesar JSON: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+            child: const Text('Añadir', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeficitTab() {
+    return Consumer2<DailyMealProvider, ProfileProvider>(
+      builder: (context, mealProvider, profileProvider, child) {
+        final userGoals = profileProvider.goals;
+        
+        if (userGoals == null) {
+          return const Center(
+            child: Text(
+              'Complete su perfil para ver el déficit',
+              style: TextStyle(color: Colors.white, fontSize: 16),
+            ),
+          );
+        }
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              _buildDateRangeSelector(mealProvider),
+              const SizedBox(height: 20),
+              _buildDeficitSummary(mealProvider, userGoals),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDateRangeSelector(DailyMealProvider mealProvider) {
+    return Card(
+      color: Colors.grey[900],
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            const Text(
+              'Rango de Fechas',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Fecha Inicio',
+                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                      const SizedBox(height: 4),
+                      InkWell(
+                        onTap: () => _selectStartDate(context),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[800],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.calendar_today, color: Colors.white, size: 16),
+                              const SizedBox(width: 8),
+                              Text(
+                                _formatDate(_startDate),
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Fecha Fin',
+                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                      const SizedBox(height: 4),
+                      InkWell(
+                        onTap: () => _selectEndDate(context),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[800],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.calendar_today, color: Colors.white, size: 16),
+                              const SizedBox(width: 8),
+                              Text(
+                                _formatDate(_endDate),
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDeficitSummary(DailyMealProvider mealProvider, userGoals) {
+    if (!mounted) {
+      return const SizedBox.shrink();
+    }
+    
+    return FutureBuilder<Map<String, double>>(
+      future: _calculateDeficitForRange(mealProvider, userGoals),
+      builder: (context, snapshot) {
+        if (!mounted) {
+          return const SizedBox.shrink();
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: Colors.red),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Card(
+            color: Colors.grey[900],
+            child: const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Error al calcular el déficit',
+                style: TextStyle(color: Colors.red, fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
+        }
+
+        final deficitData = snapshot.data ?? {};
+        final totalDeficit = deficitData['totalDeficit'] ?? 0.0;
+        final totalDays = deficitData['totalDays'] ?? 0.0;
+        final averageDeficit = deficitData['averageDeficit'] ?? 0.0;
+        final fatLost = deficitData['fatLost'] ?? 0.0;
+
+        return Column(
+          children: [
+            Card(
+              color: Colors.grey[900],
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    const Text(
+                      'Resumen del Déficit',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildDeficitRow('Días analizados', '${totalDays.toInt()}', 'días'),
+                    _buildDeficitRow('Déficit total', '${totalDeficit.toStringAsFixed(0)}', 'kcal'),
+                    _buildDeficitRow('Déficit promedio', '${averageDeficit.toStringAsFixed(0)}', 'kcal/día'),
+                    _buildDeficitRow('Grasa perdida (aprox.)', '${fatLost.toStringAsFixed(1)}', 'kg'),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Card(
+              color: Colors.grey[900],
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    const Text(
+                      'Información Nutricional',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      '• 1 kg de grasa = ~7,700 kcal\n'
+                      '• Déficit de 500 kcal/día = ~0.5 kg/semana\n'
+                      '• Déficit de 1,000 kcal/día = ~1 kg/semana',
+                      style: TextStyle(color: Colors.white70, fontSize: 14),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDeficitRow(String label, String value, String unit) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white, fontSize: 16),
+          ),
+          Row(
+            children: [
+              Text(
+                value,
+                style: const TextStyle(
+                  color: Colors.red,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                unit,
+                style: const TextStyle(color: Colors.grey, fontSize: 14),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<Map<String, double>> _calculateDeficitForRange(DailyMealProvider mealProvider, userGoals) async {
+    try {
+      double totalDeficit = 0;
+      double totalDays = 0;
+      
+      final currentDate = _startDate;
+      final endDate = _endDate;
+      
+      for (DateTime date = currentDate; 
+           date.isBefore(endDate.add(const Duration(days: 1))); 
+           date = date.add(const Duration(days: 1))) {
+        
+        final documentId = DailyMeal.getDocumentId(mealProvider.userId, date);
+        
+        // Intentar obtener la comida del día
+        DailyMeal? meal;
+        try {
+          final doc = await FirebaseFirestore.instance
+              .collection('comidas_diarias')
+              .doc(documentId)
+              .get();
+          
+          if (doc.exists) {
+            meal = DailyMeal.fromJson(doc.data()!, documentId: doc.id);
+          }
+        } catch (e) {
+          // Ignorar errores y continuar
+          continue;
+        }
+
+        // Solo considerar días que tengan registros de comidas
+        if (meal != null && meal.consumedFoods.isNotEmpty) {
+          final consumedKcal = meal.totalKcal;
+          final targetKcal = userGoals.calories;
+          final dailyDeficit = targetKcal - consumedKcal;
+          
+          totalDeficit += dailyDeficit;
+          totalDays += 1.0;
+        }
+      }
+
+      final averageDeficit = totalDays > 0 ? totalDeficit / totalDays : 0;
+      final fatLost = totalDeficit / 7700; // 1 kg de grasa = ~7,700 kcal
+
+      return {
+        'totalDeficit': totalDeficit.toDouble(),
+        'totalDays': totalDays.toDouble(),
+        'averageDeficit': averageDeficit.toDouble(),
+        'fatLost': fatLost.toDouble(),
+      };
+    } catch (e) {
+      // Retornar valores por defecto en caso de error
+      return {
+        'totalDeficit': 0.0,
+        'totalDays': 0.0,
+        'averageDeficit': 0.0,
+        'fatLost': 0.0,
+      };
+    }
+  }
+
+  Future<void> _selectStartDate(BuildContext context) async {
+    final selectedDate = await showDatePicker(
+      context: context,
+      initialDate: _startDate,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: _endDate,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Colors.red,
+              onPrimary: Colors.white,
+              surface: Colors.black,
+              onSurface: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (selectedDate != null && mounted) {
+      setState(() {
+        _startDate = selectedDate;
+      });
+    }
+  }
+
+  Future<void> _selectEndDate(BuildContext context) async {
+    final selectedDate = await showDatePicker(
+      context: context,
+      initialDate: _endDate,
+      firstDate: _startDate,
+      lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Colors.red,
+              onPrimary: Colors.white,
+              surface: Colors.black,
+              onSurface: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (selectedDate != null && mounted) {
+      setState(() {
+        _endDate = selectedDate;
+      });
     }
   }
 

@@ -171,345 +171,147 @@ class _AddFoodScreenState extends State<AddFoodScreen> with TickerProviderStateM
   }
 
   Widget _buildFormTab(FoodProvider foodProvider) {
-    // Controladores para búsqueda y filtro
-    final TextEditingController searchController = TextEditingController();
-    String? filterType;
-
-    return StatefulBuilder(
-      builder: (context, setState) {
-        // Filtrado y búsqueda
-        List<Food> filteredFoods = foodProvider.foods;
-        if (searchController.text.isNotEmpty) {
-          filteredFoods = filteredFoods.where((food) =>
-            food.nombre.toLowerCase().contains(searchController.text.toLowerCase())
-          ).toList();
-        }
-        if (filterType != null && filterType!.isNotEmpty) {
-          filteredFoods = filteredFoods.where((food) => food.tipo == filterType).toList();
-        }
-
-        return Column(
-          children: [
-            Form(
-              key: _formKey,
-              child: ListView(
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          Form(
+            key: _formKey,
+            child: Card(
+              child: Padding(
                 padding: const EdgeInsets.all(16),
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Añadir nuevo alimento',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: _nombreController,
-                            decoration: const InputDecoration(
-                              labelText: 'Nombre del alimento',
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.fastfood),
-                            ),
-                            validator: (value) => value?.isEmpty == true ? 'Requerido' : null,
-                          ),
-                          const SizedBox(height: 16),
-                          DropdownButtonFormField<String>(
-                            value: _selectedType,
-                            decoration: const InputDecoration(
-                              labelText: 'Tipo de alimento',
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.category),
-                            ),
-                            items: foodProvider.foodTypes.map((String type) {
-                              return DropdownMenuItem<String>(
-                                value: type,
-                                child: Text(type),
-                              );
-                            }).toList(),
-                            onChanged: (String? newValue) {
-                              setState(() {
-                                _selectedType = newValue!;
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: _cantidadController,
-                            decoration: const InputDecoration(
-                              labelText: 'Cantidad de referencia (g)',
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.scale),
-                            ),
-                            keyboardType: TextInputType.number,
-                            validator: (value) {
-                              if (value?.isEmpty == true) return 'Requerido';
-                              if (double.tryParse(value!) == null) return 'Número válido requerido';
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: _kcalController,
-                            decoration: const InputDecoration(
-                              labelText: 'Kilocalorías',
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.local_fire_department),
-                            ),
-                            keyboardType: TextInputType.number,
-                            validator: (value) {
-                              if (value?.isEmpty == true) return 'Requerido';
-                              if (double.tryParse(value!) == null) return 'Número válido requerido';
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: _proteinasController,
-                            decoration: const InputDecoration(
-                              labelText: 'Proteínas (g)',
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.fitness_center),
-                            ),
-                            keyboardType: TextInputType.number,
-                            validator: (value) {
-                              if (value?.isEmpty == true) return 'Requerido';
-                              if (double.tryParse(value!) == null) return 'Número válido requerido';
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: _carbohidratosController,
-                            decoration: const InputDecoration(
-                              labelText: 'Carbohidratos (g)',
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.grain),
-                            ),
-                            keyboardType: TextInputType.number,
-                            validator: (value) {
-                              if (value?.isEmpty == true) return 'Requerido';
-                              if (double.tryParse(value!) == null) return 'Número válido requerido';
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: _grasasController,
-                            decoration: const InputDecoration(
-                              labelText: 'Grasas (g)',
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.opacity),
-                            ),
-                            keyboardType: TextInputType.number,
-                            validator: (value) {
-                              if (value?.isEmpty == true) return 'Requerido';
-                              if (double.tryParse(value!) == null) return 'Número válido requerido';
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 24),
-                          ElevatedButton(
-                            onPressed: foodProvider.loading ? null : _addSingleFood,
-                            style: ElevatedButton.styleFrom(
-                              minimumSize: const Size(double.infinity, 50),
-                            ),
-                            child: foodProvider.loading
-                                ? const CircularProgressIndicator(color: Colors.white)
-                                : const Text('Añadir Alimento', style: TextStyle(fontSize: 16)),
-                          ),
-                        ],
-                      ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Añadir nuevo alimento',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            // Buscador y filtro
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: searchController,
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _nombreController,
                       decoration: const InputDecoration(
-                        labelText: 'Buscar alimento...',
+                        labelText: 'Nombre del alimento',
                         border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.search),
+                        prefixIcon: Icon(Icons.fastfood),
                       ),
-                      onChanged: (_) => setState(() {}),
+                      validator: (value) => value?.isEmpty == true ? 'Requerido' : null,
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  DropdownButton<String>(
-                    value: filterType,
-                    hint: const Text('Tipo'),
-                    items: [
-                      const DropdownMenuItem<String>(value: null, child: Text('Todos')),
-                      ...foodProvider.foodTypes.map((type) => DropdownMenuItem<String>(
-                        value: type,
-                        child: Text(type),
-                      )),
-                    ],
-                    onChanged: (value) {
-                      setState(() {
-                        filterType = value;
-                      });
-                    },
-                  ),
-                ],
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: foodProvider.foodTypes.contains(_selectedType) ? _selectedType : foodProvider.foodTypes.first,
+                      decoration: const InputDecoration(
+                        labelText: 'Tipo de alimento',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.category),
+                      ),
+                      items: foodProvider.foodTypes.toSet().map((String type) {
+                        return DropdownMenuItem<String>(
+                          value: type,
+                          child: Text(type),
+                        );
+                      }).toList(),
+                      onChanged: (String? newValue) {
+                        setState(() {
+                          _selectedType = newValue!;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _cantidadController,
+                      decoration: const InputDecoration(
+                        labelText: 'Cantidad de referencia (g)',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.scale),
+                      ),
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        if (value?.isEmpty == true) return 'Requerido';
+                        if (double.tryParse(value!) == null) return 'Número válido requerido';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _kcalController,
+                      decoration: const InputDecoration(
+                        labelText: 'Kilocalorías',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.local_fire_department),
+                      ),
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        if (value?.isEmpty == true) return 'Requerido';
+                        if (double.tryParse(value!) == null) return 'Número válido requerido';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _proteinasController,
+                      decoration: const InputDecoration(
+                        labelText: 'Proteínas (g)',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.fitness_center),
+                      ),
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        if (value?.isEmpty == true) return 'Requerido';
+                        if (double.tryParse(value!) == null) return 'Número válido requerido';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _carbohidratosController,
+                      decoration: const InputDecoration(
+                        labelText: 'Carbohidratos (g)',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.grain),
+                      ),
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        if (value?.isEmpty == true) return 'Requerido';
+                        if (double.tryParse(value!) == null) return 'Número válido requerido';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _grasasController,
+                      decoration: const InputDecoration(
+                        labelText: 'Grasas (g)',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.opacity),
+                      ),
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        if (value?.isEmpty == true) return 'Requerido';
+                        if (double.tryParse(value!) == null) return 'Número válido requerido';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: foodProvider.loading ? null : _addSingleFood,
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 50),
+                        ),
+                        child: foodProvider.loading
+                            ? const CircularProgressIndicator(color: Colors.white)
+                            : const Text('Añadir Alimento', style: TextStyle(fontSize: 16)),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 8),
-            // Lista de alimentos
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                children: filteredFoods.map((food) => Card(
-                  child: ListTile(
-                    title: Text(food.nombre),
-                    subtitle: Text('Tipo: ${food.tipo} | ${food.kcal} kcal | ${food.proteinas}g P | ${food.carbohidratos}g C | ${food.grasas}g G'),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.edit, color: Colors.blue),
-                          onPressed: () async {
-                            final nombreController = TextEditingController(text: food.nombre);
-                            final cantidadController = TextEditingController(text: food.cantidadReferencia.toString());
-                            final kcalController = TextEditingController(text: food.kcal.toString());
-                            final proteinasController = TextEditingController(text: food.proteinas.toString());
-                            final carbohidratosController = TextEditingController(text: food.carbohidratos.toString());
-                            final grasasController = TextEditingController(text: food.grasas.toString());
-                            String tipo = food.tipo;
-                            await showDialog(
-                              context: context,
-                              builder: (context) {
-                                return AlertDialog(
-                                  title: const Text('Editar alimento'),
-                                  content: SingleChildScrollView(
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        TextField(
-                                          controller: nombreController,
-                                          decoration: const InputDecoration(labelText: 'Nombre'),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        DropdownButtonFormField<String>(
-                                          value: tipo,
-                                          decoration: const InputDecoration(labelText: 'Tipo'),
-                                          items: foodProvider.foodTypes.map((String t) {
-                                            return DropdownMenuItem<String>(
-                                              value: t,
-                                              child: Text(t),
-                                            );
-                                          }).toList(),
-                                          onChanged: (String? newValue) {
-                                            tipo = newValue!;
-                                          },
-                                        ),
-                                        const SizedBox(height: 8),
-                                        TextField(
-                                          controller: cantidadController,
-                                          decoration: const InputDecoration(labelText: 'Cantidad de referencia (g)'),
-                                          keyboardType: TextInputType.number,
-                                        ),
-                                        const SizedBox(height: 8),
-                                        TextField(
-                                          controller: kcalController,
-                                          decoration: const InputDecoration(labelText: 'Kilocalorías'),
-                                          keyboardType: TextInputType.number,
-                                        ),
-                                        const SizedBox(height: 8),
-                                        TextField(
-                                          controller: proteinasController,
-                                          decoration: const InputDecoration(labelText: 'Proteínas (g)'),
-                                          keyboardType: TextInputType.number,
-                                        ),
-                                        const SizedBox(height: 8),
-                                        TextField(
-                                          controller: carbohidratosController,
-                                          decoration: const InputDecoration(labelText: 'Carbohidratos (g)'),
-                                          keyboardType: TextInputType.number,
-                                        ),
-                                        const SizedBox(height: 8),
-                                        TextField(
-                                          controller: grasasController,
-                                          decoration: const InputDecoration(labelText: 'Grasas (g)'),
-                                          keyboardType: TextInputType.number,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(context),
-                                      child: const Text('Cancelar'),
-                                    ),
-                                    TextButton(
-                                      onPressed: () async {
-                                        final updatedFood = Food(
-                                          id: food.id,
-                                          nombre: nombreController.text.trim(),
-                                          tipo: tipo,
-                                          cantidadReferencia: double.tryParse(cantidadController.text) ?? 0,
-                                          kcal: double.tryParse(kcalController.text) ?? 0,
-                                          proteinas: double.tryParse(proteinasController.text) ?? 0,
-                                          carbohidratos: double.tryParse(carbohidratosController.text) ?? 0,
-                                          grasas: double.tryParse(grasasController.text) ?? 0,
-                                        );
-                                        await foodProvider.updateFood(updatedFood);
-                                        Navigator.pop(context);
-                                      },
-                                      child: const Text('Guardar'),
-                                    ),
-                                  ],
-                                );
-                              },
-                            );
-                          },
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () async {
-                            final confirm = await showDialog<bool>(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                title: const Text('Eliminar alimento'),
-                                content: Text('¿Seguro que deseas eliminar "${food.nombre}"?'),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context, false),
-                                    child: const Text('Cancelar'),
-                                  ),
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context, true),
-                                    child: const Text('Eliminar'),
-                                  ),
-                                ],
-                              ),
-                            );
-                            if (confirm == true) {
-                              await foodProvider.deleteFood(food.id!);
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                )).toList(),
-              ),
-            ),
-          ],
-        );
-      },
+          ),
+        ],
+      ),
     );
   }
 
@@ -552,7 +354,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> with TickerProviderStateM
                     hint: const Text('Tipo'),
                     items: [
                       const DropdownMenuItem<String>(value: null, child: Text('Todos')),
-                      ...foodProvider.foodTypes.map((type) => DropdownMenuItem<String>(
+                      ...foodProvider.foodTypes.toSet().map((type) => DropdownMenuItem<String>(
                         value: type,
                         child: Text(type),
                       )),
@@ -586,90 +388,96 @@ class _AddFoodScreenState extends State<AddFoodScreen> with TickerProviderStateM
                             final proteinasController = TextEditingController(text: food.proteinas.toString());
                             final carbohidratosController = TextEditingController(text: food.carbohidratos.toString());
                             final grasasController = TextEditingController(text: food.grasas.toString());
-                            String tipo = food.tipo;
+                            String tipo = foodProvider.foodTypes.contains(food.tipo) ? food.tipo : foodProvider.foodTypes.first;
                             await showDialog(
                               context: context,
                               builder: (context) {
-                                return AlertDialog(
-                                  title: const Text('Editar alimento'),
-                                  content: SingleChildScrollView(
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        TextField(
-                                          controller: nombreController,
-                                          decoration: const InputDecoration(labelText: 'Nombre'),
+                                return StatefulBuilder(
+                                  builder: (context, setState) {
+                                    return AlertDialog(
+                                      title: const Text('Editar alimento'),
+                                      content: SingleChildScrollView(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            TextField(
+                                              controller: nombreController,
+                                              decoration: const InputDecoration(labelText: 'Nombre'),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            DropdownButtonFormField<String>(
+                                              value: tipo,
+                                              decoration: const InputDecoration(labelText: 'Tipo'),
+                                              items: foodProvider.foodTypes.toSet().map((String t) {
+                                                return DropdownMenuItem<String>(
+                                                  value: t,
+                                                  child: Text(t),
+                                                );
+                                              }).toList(),
+                                              onChanged: (String? newValue) {
+                                                setState(() {
+                                                  tipo = newValue!;
+                                                });
+                                              },
+                                            ),
+                                            const SizedBox(height: 8),
+                                            TextField(
+                                              controller: cantidadController,
+                                              decoration: const InputDecoration(labelText: 'Cantidad de referencia (g)'),
+                                              keyboardType: TextInputType.number,
+                                            ),
+                                            const SizedBox(height: 8),
+                                            TextField(
+                                              controller: kcalController,
+                                              decoration: const InputDecoration(labelText: 'Kilocalorías'),
+                                              keyboardType: TextInputType.number,
+                                            ),
+                                            const SizedBox(height: 8),
+                                            TextField(
+                                              controller: proteinasController,
+                                              decoration: const InputDecoration(labelText: 'Proteínas (g)'),
+                                              keyboardType: TextInputType.number,
+                                            ),
+                                            const SizedBox(height: 8),
+                                            TextField(
+                                              controller: carbohidratosController,
+                                              decoration: const InputDecoration(labelText: 'Carbohidratos (g)'),
+                                              keyboardType: TextInputType.number,
+                                            ),
+                                            const SizedBox(height: 8),
+                                            TextField(
+                                              controller: grasasController,
+                                              decoration: const InputDecoration(labelText: 'Grasas (g)'),
+                                              keyboardType: TextInputType.number,
+                                            ),
+                                          ],
                                         ),
-                                        const SizedBox(height: 8),
-                                        DropdownButtonFormField<String>(
-                                          value: tipo,
-                                          decoration: const InputDecoration(labelText: 'Tipo'),
-                                          items: foodProvider.foodTypes.map((String t) {
-                                            return DropdownMenuItem<String>(
-                                              value: t,
-                                              child: Text(t),
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context),
+                                          child: const Text('Cancelar'),
+                                        ),
+                                        TextButton(
+                                          onPressed: () async {
+                                            final updatedFood = Food(
+                                              id: food.id,
+                                              nombre: nombreController.text.trim(),
+                                              tipo: tipo,
+                                              cantidadReferencia: double.tryParse(cantidadController.text) ?? 0,
+                                              kcal: double.tryParse(kcalController.text) ?? 0,
+                                              proteinas: double.tryParse(proteinasController.text) ?? 0,
+                                              carbohidratos: double.tryParse(carbohidratosController.text) ?? 0,
+                                              grasas: double.tryParse(grasasController.text) ?? 0,
                                             );
-                                          }).toList(),
-                                          onChanged: (String? newValue) {
-                                            tipo = newValue!;
+                                            await foodProvider.updateFood(updatedFood);
+                                            Navigator.pop(context);
                                           },
-                                        ),
-                                        const SizedBox(height: 8),
-                                        TextField(
-                                          controller: cantidadController,
-                                          decoration: const InputDecoration(labelText: 'Cantidad de referencia (g)'),
-                                          keyboardType: TextInputType.number,
-                                        ),
-                                        const SizedBox(height: 8),
-                                        TextField(
-                                          controller: kcalController,
-                                          decoration: const InputDecoration(labelText: 'Kilocalorías'),
-                                          keyboardType: TextInputType.number,
-                                        ),
-                                        const SizedBox(height: 8),
-                                        TextField(
-                                          controller: proteinasController,
-                                          decoration: const InputDecoration(labelText: 'Proteínas (g)'),
-                                          keyboardType: TextInputType.number,
-                                        ),
-                                        const SizedBox(height: 8),
-                                        TextField(
-                                          controller: carbohidratosController,
-                                          decoration: const InputDecoration(labelText: 'Carbohidratos (g)'),
-                                          keyboardType: TextInputType.number,
-                                        ),
-                                        const SizedBox(height: 8),
-                                        TextField(
-                                          controller: grasasController,
-                                          decoration: const InputDecoration(labelText: 'Grasas (g)'),
-                                          keyboardType: TextInputType.number,
+                                          child: const Text('Guardar'),
                                         ),
                                       ],
-                                    ),
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(context),
-                                      child: const Text('Cancelar'),
-                                    ),
-                                    TextButton(
-                                      onPressed: () async {
-                                        final updatedFood = Food(
-                                          id: food.id,
-                                          nombre: nombreController.text.trim(),
-                                          tipo: tipo,
-                                          cantidadReferencia: double.tryParse(cantidadController.text) ?? 0,
-                                          kcal: double.tryParse(kcalController.text) ?? 0,
-                                          proteinas: double.tryParse(proteinasController.text) ?? 0,
-                                          carbohidratos: double.tryParse(carbohidratosController.text) ?? 0,
-                                          grasas: double.tryParse(grasasController.text) ?? 0,
-                                        );
-                                        await foodProvider.updateFood(updatedFood);
-                                        Navigator.pop(context);
-                                      },
-                                      child: const Text('Guardar'),
-                                    ),
-                                  ],
+                                    );
+                                  },
                                 );
                               },
                             );

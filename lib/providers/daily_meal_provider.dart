@@ -40,6 +40,7 @@ class DailyMealProvider extends ChangeNotifier {
       notifyListeners();
 
       final snapshot = await _firestore.collection('alimentos').get();
+      
       _availableFoods = snapshot.docs
           .map((doc) => Food.fromJson(doc.data(), documentId: doc.id))
           .toList();
