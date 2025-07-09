@@ -164,7 +164,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> with TickerProviderStateM
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
-              color: Colors.red.withOpacity(0.1),
+              color: Colors.red.withAlpha(25),
               child: Row(
                 children: [
                   const Icon(Icons.error, color: Colors.red),

@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class Food {
   String? id; // Para identificar el documento en Firestore
   String nombre;

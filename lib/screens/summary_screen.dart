@@ -95,18 +95,28 @@ class _SummaryScreenState extends State<SummaryScreen>
           );
         }
 
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              _buildDateSelector(mealProvider),
-              const SizedBox(height: 20),
-              _buildMacrosSummaryCard(currentMeal, userGoals),
-              const SizedBox(height: 20),
-              _buildProgressChart(currentMeal, userGoals),
-              const SizedBox(height: 20),
-              _buildConsumedFoodsList(mealProvider),
-            ],
+        return RefreshIndicator(
+          color: Colors.red,
+          onRefresh: () async {
+            await Provider.of<ProfileProvider>(context, listen: false).loadProfileFromFirestore();
+            await Provider.of<DailyMealProvider>(context, listen: false).setSelectedDate(
+              Provider.of<DailyMealProvider>(context, listen: false).selectedDate,
+            );
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                _buildDateSelector(mealProvider),
+                const SizedBox(height: 20),
+                _buildMacrosSummaryCard(currentMeal, userGoals),
+                const SizedBox(height: 20),
+                _buildProgressChart(currentMeal, userGoals),
+                const SizedBox(height: 20),
+                _buildConsumedFoodsList(mealProvider),
+              ],
+            ),
           ),
         );
       },
@@ -122,13 +132,19 @@ class _SummaryScreenState extends State<SummaryScreen>
           );
         }
 
-        return Column(
-          children: [
-            _buildSearchAndFilters(mealProvider),
-            Expanded(
-              child: _buildFoodsList(mealProvider),
-            ),
-          ],
+        return RefreshIndicator(
+          color: Colors.red,
+          onRefresh: () async {
+            await Provider.of<DailyMealProvider>(context, listen: false).loadFoods();
+          },
+          child: Column(
+            children: [
+              _buildSearchAndFilters(mealProvider),
+              Expanded(
+                child: _buildFoodsList(mealProvider),
+              ),
+            ],
+          ),
         );
       },
     );
@@ -170,10 +186,10 @@ class _SummaryScreenState extends State<SummaryScreen>
     final totalCarbohidratos = currentMeal?.totalCarbohidratos ?? 0;
     final totalGrasas = currentMeal?.totalGrasas ?? 0;
 
-    final goalKcal = userGoals.objetivoKcal;
-    final goalProteinas = userGoals.objetivoProteinas;
-    final goalCarbohidratos = userGoals.objetivoCarbohidratos;
-    final goalGrasas = userGoals.objetivoGrasas;
+    final goalKcal = userGoals.calories;
+    final goalProteinas = userGoals.protein;
+    final goalCarbohidratos = userGoals.carbs;
+    final goalGrasas = userGoals.fat;
 
     return Card(
       color: Colors.grey[900],
@@ -252,10 +268,10 @@ class _SummaryScreenState extends State<SummaryScreen>
     if (currentMeal == null) return const SizedBox();
 
     final progressData = currentMeal.getProgressPercentage({
-      'kcal': userGoals.objetivoKcal,
-      'proteinas': userGoals.objetivoProteinas,
-      'carbohidratos': userGoals.objetivoCarbohidratos,
-      'grasas': userGoals.objetivoGrasas,
+      'kcal': userGoals.calories,
+      'proteinas': userGoals.protein,
+      'carbohidratos': userGoals.carbs,
+      'grasas': userGoals.fat,
     });
 
     return Card(

@@ -116,10 +116,10 @@ class DailyMeal {
 
   // Calcular totales automáticamente
   void calculateTotals() {
-    totalKcal = consumedFoods.fold(0, (sum, food) => sum + food.kcal);
-    totalProteinas = consumedFoods.fold(0, (sum, food) => sum + food.proteinas);
-    totalCarbohidratos = consumedFoods.fold(0, (sum, food) => sum + food.carbohidratos);
-    totalGrasas = consumedFoods.fold(0, (sum, food) => sum + food.grasas);
+    totalKcal = consumedFoods.fold(0, (acc, food) => acc + food.kcal);
+    totalProteinas = consumedFoods.fold(0, (acc, food) => acc + food.proteinas);
+    totalCarbohidratos = consumedFoods.fold(0, (acc, food) => acc + food.carbohidratos);
+    totalGrasas = consumedFoods.fold(0, (acc, food) => acc + food.grasas);
   }
 
   // Obtener resumen de macros restantes basado en objetivos

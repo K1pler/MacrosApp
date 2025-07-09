@@ -104,14 +104,6 @@ class ProfileProvider extends ChangeNotifier {
     }
   }
 
-  /// Método alternativo: Fórmula Katch-McArdle (requiere % de grasa corporal)
-  /// BMR = 370 + (21.6 × masa magra en kg)
-  /// Más precisa si conoces el % de grasa corporal
-  double _calculateBMRKatchMcArdle(UserProfile profile, double bodyFatPercentage) {
-    final leanMass = profile.weight * (1 - bodyFatPercentage / 100);
-    return 370 + (21.6 * leanMass);
-  }
-
   /// Método para obtener información adicional del cálculo
   Map<String, double> getCalculationDetails() {
     if (_profile == null) return {};
