@@ -7,6 +7,7 @@ import '../providers/profile_provider.dart';
 import '../providers/food_provider.dart';
 import '../models/food.dart';
 import '../models/daily_meal.dart';
+import '../firebase_status_label.dart';
 
 class SummaryScreen extends StatefulWidget {
   const SummaryScreen({super.key});
@@ -28,11 +29,18 @@ class _SummaryScreenState extends State<SummaryScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       final mealProvider = Provider.of<DailyMealProvider>(context, listen: false);
       final profileProvider = Provider.of<ProfileProvider>(context, listen: false);
-      mealProvider.loadFoods();
-      profileProvider.loadProfileFromFirestore();
+      
+      // Cargar datos
+      await mealProvider.loadFoods();
+      await profileProvider.loadProfileFromFirestore();
+      
+      // Inicializar filtros para mostrar todos los alimentos
+      if (mealProvider.availableFoods.isNotEmpty) {
+        mealProvider.filterFoods(tipo: null, searchText: null);
+      }
     });
   }
 
@@ -51,6 +59,7 @@ class _SummaryScreenState extends State<SummaryScreen>
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
+        leading: const FirebaseStatusIcon(),
         title: const Text('Resumen Diario'),
         centerTitle: true,
         bottom: TabBar(
@@ -145,6 +154,12 @@ class _SummaryScreenState extends State<SummaryScreen>
         // Recargar alimentos de FoodProvider en DailyMealProvider si hay cambios
         if (foodProvider.foods.isNotEmpty) {
           mealProvider.syncFoodsFromFoodProvider(foodProvider.foods);
+          // Asegurar que se muestren todos los alimentos por defecto
+          if (mealProvider.filteredFoods.isEmpty && mealProvider.availableFoods.isNotEmpty) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              mealProvider.filterFoods(tipo: null, searchText: null);
+            });
+          }
         }
 
         return RefreshIndicator(
@@ -154,15 +169,37 @@ class _SummaryScreenState extends State<SummaryScreen>
             await Provider.of<DailyMealProvider>(context, listen: false).loadFoods();
             if (!mounted) return;
           },
-          child: Column(
-            children: [
-              _buildSearchAndFilters(mealProvider),
-              const SizedBox(height: 8),
-              _buildAddCombinedFoodButton(mealProvider),
-              Expanded(
-                child: _buildFoodsList(mealProvider),
-              ),
-            ],
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Filtro en Card
+                Card(
+                  color: Colors.grey[900],
+                  margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: _buildSearchAndFilters(mealProvider),
+                ),
+                // Botón añadir comida combinada en Card centrado
+                Card(
+                  color: Colors.grey[900],
+                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Center(child: _buildAddCombinedFoodButton(mealProvider)),
+                  ),
+                ),
+                // Listado de alimentos en Card
+                Card(
+                  color: Colors.grey[900],
+                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: _buildFoodsList(mealProvider),
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -371,20 +408,40 @@ class _SummaryScreenState extends State<SummaryScreen>
       color: Colors.grey[900],
       padding: const EdgeInsets.all(16),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Título de la sección
+          const Text(
+            'Buscar Alimentos',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          
+          // Campo de búsqueda por nombre
+          const Text(
+            'Buscar por nombre:',
+            style: TextStyle(color: Colors.grey, fontSize: 14),
+          ),
+          const SizedBox(height: 8),
           TextField(
             controller: _searchController,
             style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
-              hintText: 'Buscar alimento...',
+              hintText: 'Escribe el nombre del alimento...',
               hintStyle: const TextStyle(color: Colors.grey),
               prefixIcon: const Icon(Icons.search, color: Colors.grey),
               suffixIcon: _searchController.text.isNotEmpty
                   ? IconButton(
                       icon: const Icon(Icons.clear, color: Colors.grey),
                       onPressed: () {
-                        _searchController.clear();
-                        mealProvider.filterFoods(tipo: _selectedFoodType);
+                        setState(() {
+                          _searchController.clear();
+                        });
+                        mealProvider.filterFoods(tipo: _selectedFoodType, searchText: '');
                       },
                     )
                   : null,
@@ -396,19 +453,18 @@ class _SummaryScreenState extends State<SummaryScreen>
               ),
             ),
             onChanged: (text) {
-              setState(() {});
-              mealProvider.filterFoods(
-                tipo: _selectedFoodType,
-                searchText: text,
-              );
+              mealProvider.filterFoods(tipo: _selectedFoodType, searchText: text.trim());
+              setState(() {}); // Para actualizar el botón clear
             },
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
+          
+          // Filtro por tipo
           const Text(
-            'Filtrar por tipo',
-            style: TextStyle(color: Colors.grey, fontSize: 13),
+            'Filtrar por tipo:',
+            style: TextStyle(color: Colors.grey, fontSize: 14),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
           DropdownButtonFormField<String>(
             value: foodTypes.contains(_selectedFoodType) ? _selectedFoodType : null,
             style: const TextStyle(color: Colors.white),
@@ -435,9 +491,51 @@ class _SummaryScreenState extends State<SummaryScreen>
               setState(() {
                 _selectedFoodType = value;
               });
-              mealProvider.filterFoods(
-                tipo: value,
-                searchText: _searchController.text,
+              mealProvider.filterFoods(tipo: value, searchText: _searchController.text.trim());
+            },
+          ),
+          const SizedBox(height: 16),
+          
+          // Botón Mostrar Todos
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _searchController.clear();
+                      _selectedFoodType = null;
+                    });
+                    mealProvider.filterFoods(tipo: null, searchText: '');
+                  },
+                  icon: const Icon(Icons.clear_all, color: Colors.white),
+                  label: const Text('Mostrar Todos'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey[700],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          
+          // Información de resultados
+          Consumer<DailyMealProvider>(
+            builder: (context, provider, child) {
+              final totalFoods = provider.availableFoods.length;
+              final filteredCount = provider.filteredFoods.length;
+              
+              return Text(
+                'Mostrando $filteredCount de $totalFoods alimentos',
+                style: const TextStyle(
+                  color: Colors.grey,
+                  fontSize: 12,
+                ),
               );
             },
           ),
@@ -448,23 +546,76 @@ class _SummaryScreenState extends State<SummaryScreen>
 
   Widget _buildFoodsList(DailyMealProvider mealProvider) {
     final foods = mealProvider.filteredFoods;
+    final totalFoods = mealProvider.availableFoods.length;
+
+    if (totalFoods == 0) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.restaurant, color: Colors.grey, size: 48),
+            SizedBox(height: 16),
+            Text(
+              'No hay alimentos disponibles',
+              style: TextStyle(color: Colors.grey, fontSize: 16),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Agrega algunos alimentos en la sección "Añadir Comida"',
+              style: TextStyle(color: Colors.grey, fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
 
     if (foods.isEmpty) {
-      return const Center(
-        child: Text(
-          'No se encontraron alimentos',
-          style: TextStyle(color: Colors.grey, fontSize: 16),
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.search_off, color: Colors.grey, size: 48),
+            const SizedBox(height: 16),
+            const Text(
+              'No se encontraron alimentos',
+              style: TextStyle(color: Colors.grey, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Intenta con otros términos de búsqueda',
+              style: TextStyle(color: Colors.grey, fontSize: 12),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () {
+                setState(() {
+                  _searchController.clear();
+                  _selectedFoodType = null;
+                });
+                mealProvider.filterFoods(tipo: null, searchText: null);
+              },
+              icon: const Icon(Icons.clear_all, color: Colors.white),
+              label: const Text('Mostrar Todos'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
         ),
       );
     }
 
     return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       itemCount: foods.length,
       itemBuilder: (context, index) {
         final food = foods[index];
         return Card(
           color: Colors.grey[900],
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          margin: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
           child: ListTile(
             title: Text(
               food.nombre,
@@ -925,9 +1076,9 @@ class _SummaryScreenState extends State<SummaryScreen>
                     ),
                     const SizedBox(height: 16),
                     _buildDeficitRow('Días analizados', '${totalDays.toInt()}', 'días'),
-                    _buildDeficitRow('Déficit total', '${totalDeficit.toStringAsFixed(0)}', 'kcal'),
-                    _buildDeficitRow('Déficit promedio', '${averageDeficit.toStringAsFixed(0)}', 'kcal/día'),
-                    _buildDeficitRow('Grasa perdida (aprox.)', '${fatLost.toStringAsFixed(1)}', 'kg'),
+                    _buildDeficitRow('Déficit total', totalDeficit.toStringAsFixed(0), 'kcal'),
+                    _buildDeficitRow('Déficit promedio', averageDeficit.toStringAsFixed(0), 'kcal/día'),
+                    _buildDeficitRow('Grasa perdida (aprox.)', fatLost.toStringAsFixed(1), 'kg'),
                   ],
                 ),
               ),

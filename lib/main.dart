@@ -8,6 +8,7 @@ import 'providers/profile_provider.dart';
 import 'providers/food_provider.dart';
 import 'providers/daily_meal_provider.dart';
 import 'screens/splash_screen.dart';
+import 'firebase_status_label.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -97,7 +98,12 @@ class _MainNavigationState extends State<MainNavigation> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _getSelectedScreen(),
+      body: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Expanded(child: _getSelectedScreen()),
+        ],
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: (index) {

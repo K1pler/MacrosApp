@@ -18,6 +18,10 @@ class DailyMealProvider extends ChangeNotifier {
   final Map<String, DailyMeal> _mealsCache = {};
   // Cache para alimentos (se carga una sola vez)
   bool _foodsLoaded = false;
+  
+  // Variables para mantener el estado del filtro
+  String? _currentFilterType;
+  String? _currentFilterText;
 
   DailyMealProvider({required this.userId}) {
     _loadTodayMeal();
@@ -58,6 +62,17 @@ class DailyMealProvider extends ChangeNotifier {
 
   // Filtrar alimentos por tipo y/o texto
   void filterFoods({String? tipo, String? searchText}) {
+    // Guardar el estado actual del filtro
+    _currentFilterType = tipo;
+    _currentFilterText = searchText;
+    
+    // Si ambos filtros son nulos o vacíos, mostrar todos los alimentos
+    if ((tipo == null || tipo.isEmpty) && (searchText == null || searchText.isEmpty)) {
+      _filteredFoods = List.from(_availableFoods);
+      notifyListeners();
+      return;
+    }
+
     _filteredFoods = _availableFoods.where((food) {
       bool matchesTipo = tipo == null || tipo.isEmpty || food.tipo == tipo;
       bool matchesText = searchText == null || 
@@ -296,7 +311,8 @@ class DailyMealProvider extends ChangeNotifier {
   // Sincronizar alimentos con FoodProvider
   void syncFoodsFromFoodProvider(List<Food> foods) {
     _availableFoods = List.from(foods);
-    _filteredFoods = List.from(foods);
-    notifyListeners();
+    
+    // Reaplicar el filtro actual en lugar de mostrar todos los alimentos
+    filterFoods(tipo: _currentFilterType, searchText: _currentFilterText);
   }
 } 
